@@ -3,7 +3,7 @@ from thread import start_new_thread
 from modules import cbpi
 
 try:
-    import RPi.GPIO as GPIO
+    import pigpio
 except Exception as e:
     pass
 
@@ -15,8 +15,7 @@ class Buzzer(object):
             cbpi.app.logger.info("INIT BUZZER NOW GPIO%s" % gpio)
             self.gpio = int(gpio)
             self.beep_level = beep_level
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(self.gpio, GPIO.OUT)
+            self.pi = pigpio.pi()
             self.state = True
             cbpi.app.logger.info("BUZZER SETUP OK")
         except Exception as e:
@@ -33,23 +32,24 @@ class Buzzer(object):
                 for i in sound:
                     if (isinstance(i, str)):
                         if i == "H" and self.beep_level == "HIGH":
-                            GPIO.output(int(self.gpio), GPIO.HIGH)
+                            self.pi.hardware_PWM(self.gpio, 1000, 500000)
                         elif i == "H" and self.beep_level != "HIGH":
-                            GPIO.output(int(self.gpio), GPIO.LOW)
+                            self.pi.hardware_PWM(self.gpio, 1000, 0)
                         elif i == "L" and self.beep_level == "HIGH":
-                            GPIO.output(int(self.gpio), GPIO.LOW)
+                            self.pi.hardware_PWM(self.gpio, 1000, 0)
                         else:
-                            GPIO.output(int(self.gpio), GPIO.HIGH)
+                            self.pi.hardware_PWM(self.gpio, 1000, 500000)
                     else:
                         time.sleep(i)
             except Exception as e:
+                cbpi.app.logger.error("BUZZER EXCEPTION %s" % str(e))
                 pass
 
         start_new_thread(play, (self.sound,))
 
-@cbpi.initalizer(order=1)
+@cbpi.initalizer(order=2)
 def init(cbpi):
-    gpio = cbpi.get_config_parameter("buzzer", 22)
+    gpio = cbpi.get_config_parameter("buzzer", 18)
     beep_level = cbpi.get_config_parameter("buzzer_beep_level", "HIGH")
 
     cbpi.buzzer = Buzzer(gpio, beep_level)
