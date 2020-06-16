@@ -1,5 +1,5 @@
 import time
-from thread import start_new_thread
+#from threading import start_new_thread
 from modules import cbpi
 
 try:
@@ -44,8 +44,8 @@ class Buzzer(object):
             except Exception as e:
                 cbpi.app.logger.error("BUZZER EXCEPTION %s" % str(e))
                 pass
-
-        start_new_thread(play, (self.sound,))
+        ## TODO
+        #start_new_thread(play, (self.sound,))
 
 @cbpi.initalizer(order=2)
 def init(cbpi):
