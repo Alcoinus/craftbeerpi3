@@ -151,8 +151,8 @@ show_menu () {
 		12)
             confirmAnswer "Are you sure you want to install KairosDB?"
             if [ $? = 0 ]; then
-			  wget https://github.com/kairosdb/kairosdb/releases/download/v1.2.1/kairosdb_1.2.1-1_all.deb
-              sudo dpkg -i kairosdb_1.2.1-1_all.deb
+			  wget https://github.com/kairosdb/kairosdb/releases/download/v1.2.2/kairosdb_1.2.2-1_all.deb
+              sudo dpkg -i kairosdb_1.2.2-1_all.deb
 			  sudo service kairosdb start
 			  show_menu
             else
