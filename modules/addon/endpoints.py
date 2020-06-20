@@ -3,7 +3,7 @@ import json
 import sys
 from flask import Blueprint, request, send_from_directory
 from importlib import import_module
-from modules import socketio, cbpi
+from modules import cbpi
 from modules.utils import chown_unroot
 
 from git import Repo
@@ -171,34 +171,31 @@ def update_addon(name):
 
 def loadCorePlugins():
     for filename in os.listdir("./modules/base_plugins"):
-
-
         if os.path.isdir("./modules/base_plugins/"+filename) is False:
             continue
         try:
-            modules[filename] = import_module("modules.base_plugins.%s" % (filename))
+            modules[filename] = import_module("modules.base_plugins.%s" % filename)
         except Exception as e:
-
-
             cbpi.notify("Failed to load plugin %s " % filename, str(e), type="danger", timeout=None)
             cbpi.app.logger.error(e)
+
 
 def loadPlugins():
     for filename in os.listdir("./modules/plugins"):
         if os.path.isdir("./modules/plugins/" + filename) is False:
             continue
         try:
-            modules[filename] = import_module("modules.plugins.%s" % (filename))
+            modules[filename] = import_module("modules.plugins.%s" % filename)
         except Exception as e:
             cbpi.notify("Failed to load plugin %s " % filename, str(e), type="danger", timeout=None)
             cbpi.app.logger.error(e)
 
-#@cbpi.initalizer(order=1)
+
 def initPlugins():
     loadCorePlugins()
     loadPlugins()
 
+
 @cbpi.initalizer(order=2)
 def init(cbpi):
-
     cbpi.app.register_blueprint(blueprint, url_prefix='/api/editor')

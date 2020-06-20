@@ -7,6 +7,7 @@ try:
 except Exception as e:
     pass
 
+
 class Buzzer(object):
 
     sound = ["H", 0.1, "L", 0.1, "H", 0.1, "L", 0.1, "H", 0.1, "L"]
@@ -46,6 +47,7 @@ class Buzzer(object):
                 pass
         ## TODO
         #start_new_thread(play, (self.sound,))
+
 
 @cbpi.initalizer(order=2)
 def init(cbpi):

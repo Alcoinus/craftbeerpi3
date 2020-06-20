@@ -4,6 +4,7 @@ import pprint
 
 from modules.core.db import get_db
 from .app_config import *
+from flask import redirect
 
 
 @app.route('/')
@@ -17,7 +18,7 @@ def index():
 
 import modules.steps
 import modules.config
-import modules.logs
+import modules.logs.endpoints
 import modules.sensors
 import modules.actor
 import modules.notification

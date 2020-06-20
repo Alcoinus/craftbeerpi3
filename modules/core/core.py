@@ -6,6 +6,7 @@ from datetime import datetime
 
 from time import localtime, strftime
 from functools import wraps, update_wrapper
+from influxdb import InfluxDBClient
 
 import requests
 import json
@@ -140,7 +141,6 @@ class SensorAPI(object):
                 t = self.socketio.start_background_task(target=start_active_sensor, instance=value.instance)
 
         except Exception as e:
-
             self.notify("Sensor Error", "Failed to setup Sensor %s. Please check the configuraiton" % value.name, type="danger", timeout=None)
             self.app.logger.error("Initializing of Sensor %s failed" % id)
 
@@ -150,9 +150,9 @@ class SensorAPI(object):
 
     def save_to_file(self, id, value, prefix):
         sensor_name = "%s_%s" % (prefix, str(id))
-        use_kairosdb = (self.cache["config"]["kairos_db"].__dict__["value"] == "YES")
+        use_influxdb = (self.cache["config"]["influx_db"].__dict__["value"] == "YES")
 
-        if use_kairosdb:
+        if use_influxdb:
             self.write_to_tsdb(prefix, sensor_name, value)
         else:
             self.write_to_logfile(sensor_name, value)
@@ -166,25 +166,32 @@ class SensorAPI(object):
             file.write(msg)
 
     def write_to_tsdb(self, prefix, sensor_name, value):
-        kairosdb_server = "http://127.0.0.1:" + self.cache["config"]["kairos_db_port"].__dict__["value"]
 
-        data = [
-            dict(name="cbpi." + sensor_name, datapoints=[
-                [int(round(time.time() * 1000)), value]
-            ], tags={
-                "cbpi": prefix,
-                "brew": self.cache["active_brew"]
-            })
+        client = InfluxDBClient(self.cache["config"]["influx_db_address"], self.cache["config"]["influx_db_port"],
+                                self.cache["config"]["influx_db_username"], self.cache["config"]["influx_db_password"],
+                                self.cache["config"]["influx_db_database_name"])
+
+        json_body = [
+            {
+                "measurement": "cbpi",
+                "tags": {
+                    "prefix": prefix,
+                    "name": sensor_name,
+                    "brew": self.cache["active_brew"]
+                },
+                "fields": {
+                    "value": float(value)
+                }
+            }
         ]
 
-        response = requests.post(kairosdb_server + "/api/v1/datapoints", json.dumps(data))
-        if not response.ok:
-            self.logger.warning("Failed to write time series entry for [%s]. Response [%s]", sensor_name, response)
+        client.write_points(json_body)
+        client.close()
 
     def log_action(self, text):
-        use_kairosdb = (self.cache["config"]["kairos_db"].__dict__["value"] == "YES")
+        use_influxdb = (self.cache["config"]["influx_db"].__dict__["value"] == "YES")
 
-        if use_kairosdb:
+        if use_influxdb:
             self.write_to_tsdb("action", "action", text)
         else:
             self.write_to_logfile("action", text)
@@ -428,12 +435,13 @@ class CraftBeerPi(ActorAPI, SensorAPI):
     def initalizer(self, order=0):
         def real_decorator(function):
             self.cache["init"].append({"function": function, "order": order})
+
             def wrapper(*args, **kwargs):
                 return function(*args, **kwargs)
+
             return wrapper
+
         return real_decorator
-
-
 
     def try_catch(self, errorResult="ERROR"):
         def real_decorator(function):
@@ -477,7 +485,7 @@ class CraftBeerPi(ActorAPI, SensorAPI):
         self.app.logger.info("Invoke Init")
         self.cache["init"] = sorted(self.cache["init"], key=lambda k: k['order'])
         for i in self.cache.get("init"):
-            self.app.logger.info("INITIALIZER - METHOD %s PAHT %s: " % (i.get("function").__name__, str(inspect.getmodule(i.get("function")).__file__) ))
+            self.app.logger.info("INITIALIZER - METHOD %s PATH %s: " % (i.get("function").__name__, str(inspect.getmodule(i.get("function")).__file__) ))
             i.get("function")(self)
 
 

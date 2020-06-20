@@ -1,10 +1,10 @@
 import datetime
 import os
-import requests
 import logging
 from flask import request, send_from_directory, json
 from flask_classy import FlaskView, route
 from modules import cbpi
+from influxdb import InfluxDBClient
 
 
 class LogView(FlaskView):
@@ -44,44 +44,54 @@ class LogView(FlaskView):
             cbpi.notify("Failed to delete log", "", type="danger")
         return ('', 204)
 
-    def query_tsdb(self, sensor_name):
-        kairosdb_server = "http://127.0.0.1:" + cbpi.cache["config"]["kairos_db_port"].__dict__["value"]
+    @route('/<t>/<int:id>', methods=["POST"])
+    def get_logs_as_json(self, t, id):
+        data = request.json
+        result = []
+        if t == "s":
+            name = cbpi.cache.get("sensors").get(id).name
+            sensor_name = "%s_%s" % ("sensor", str(id))
+            result.append({"name": name, "data": self.read_log_as_json(sensor_name)})
 
-        data = dict(metrics=[
-            {
-                "tags": {},
-                "name": "cbpi.%s" % sensor_name,
-                "aggregators": [
-                    {
-                        "name": "avg",
-                        "align_sampling": True,
-                        "sampling": {
-                            "value": cbpi.cache["config"]["kairos_db_sampling_value"].__dict__["value"],
-                            "unit": "seconds"
-                        },
-                        "align_start_time": True
-                    }
-                ]
-            }
-        ],
-            cache_time=0,
-            start_relative={
-                "value": cbpi.cache["config"]["kairos_db_start_relative"].__dict__["value"],
-                "unit": "days"
-            })
+        if t == "k":
+            kettle = cbpi.cache.get("kettle").get(id)
+            result = map(self.convert_chart_data_to_json, cbpi.get_controller(kettle.logic).get("class").chart(kettle))
+
+        if t == "f":
+            fermenter = cbpi.cache.get("fermenter").get(id)
+            result = map(self.convert_chart_data_to_json,
+                         cbpi.get_fermentation_controller(fermenter.logic).get("class").chart(fermenter))
+
+        return json.dumps(result)
+
+    def query_tsdb(self, sensor_name):
+
+        client = InfluxDBClient(cbpi.cache["config"]["influx_db_address"], cbpi.cache["config"]["influx_db_port"],
+                                cbpi.cache["config"]["influx_db_username"], cbpi.cache["config"]["influx_db_password"],
+                                cbpi.cache["config"]["influx_db_database_name"])
+
+        query_prefix = 'select mean(value) from cbpi where time > now() - ' + \
+                       str(cbpi.cache["config"]["influx_db_start_relative"].__dict__["value"]) + \
+                       'd and \"name\" = \'' + sensor_name + '\''
+
+        query_suffix = ' group by time(' +\
+                       str(cbpi.cache["config"]["influx_db_sampling_value"].__dict__["value"]) +\
+                       's) fill(previous)'
 
         if cbpi.cache["active_brew"] != "none":
-            data["metrics"][0]["tags"] = {"brew": [cbpi.cache["active_brew"]]}
-
-        self.logger.debug("query: %s", json.dumps(data))
-
-        response = requests.post(kairosdb_server + "/api/v1/datapoints/query", json.dumps(data))
-        if response.ok:
-            self.logger.debug("Fetching time series for [%s] took [%s]", sensor_name, response.elapsed)
-            self.logger.debug("Time series for [%s] is [%s]", sensor_name, response.json())
-            return response.json()["queries"][0]["results"][0]["values"]
+            query = query_prefix + ' and brew = \'' + cbpi.cache["active_brew"] + '\'' + query_suffix
         else:
-            self.logger.warning("Failed to fetch time series for [%s]. Response [%s]", sensor_name, response)
+            query = query_prefix + query_suffix
+
+        self.logger.debug("query: %s", query)
+        result = client.query(query, epoch="ms")
+        client.close()
+        try:
+            values = result.raw['series'][0]['values']
+            self.logger.debug("Time series for [%s] is [%s]", sensor_name, values)
+            return values
+        except:
+            self.logger.warning("Failed to fetch time series for [%s]", sensor_name)
 
     def query_log(self, filename, value_type):
         array = []
@@ -111,41 +121,20 @@ class LogView(FlaskView):
         return array
 
     def read_log_as_json(self, sensor_name):
-        use_kairosdb = (cbpi.cache["config"]["kairos_db"].__dict__["value"] == "YES")
+        use_influxdb = (cbpi.cache["config"]["influx_db"].__dict__["value"] == "YES")
 
-        if use_kairosdb:
+        if use_influxdb:
             return self.query_tsdb(sensor_name)
         else:
             filename = "./logs/%s.log" % sensor_name
             return self.query_log(filename, "float")
 
-
     def convert_chart_data_to_json(self, chart_data):
         return {"name": chart_data["name"],
                 "data": self.read_log_as_json(chart_data["data_type"] + "_" + str(chart_data["data_id"]))}
 
-    @route('/<t>/<int:id>', methods=["POST"])
-    def get_logs_as_json(self, t, id):
-        data = request.json
-        result = []
-        if t == "s":
-            name = cbpi.cache.get("sensors").get(id).name
-            sensor_name = "%s_%s" % ("sensor", str(id))
-            result.append({"name": name, "data": self.read_log_as_json(sensor_name)})
-
-        if t == "k":
-            kettle = cbpi.cache.get("kettle").get(id)
-            result = map(self.convert_chart_data_to_json, cbpi.get_controller(kettle.logic).get("class").chart(kettle))
-
-        if t == "f":
-            fermenter = cbpi.cache.get("fermenter").get(id)
-            result = map(self.convert_chart_data_to_json,
-                         cbpi.get_fermentation_controller(fermenter.logic).get("class").chart(fermenter))
-
-        return json.dumps(result)
-
-    @route('/download/<file>')
     @cbpi.nocache
+    @route('/download/<file>')
     def download(self, file):
         if not self.check_filename(file):
             return ('File Not Found', 404)
@@ -158,7 +147,7 @@ class LogView(FlaskView):
         return True if pattern.match(name) else False
 
 
-@cbpi.initalizer()
+@cbpi.initalizer(order=2)
 def init(app):
     """
     Initializer for the message module

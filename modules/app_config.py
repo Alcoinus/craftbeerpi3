@@ -1,10 +1,10 @@
-import json
-import sys, os
-from flask import Flask, render_template, redirect, json, g
+from flask import Flask, json, g
 
 import yaml
 
 import logging.config
+
+from flask_socketio import SocketIO
 
 from modules.core.core import CraftBeerPi, ActorBase, SensorBase
 from modules.core.db import DBModel
@@ -41,9 +41,10 @@ class ComplexEncoder(json.JSONEncoder):
             pass
         return None
 
+
 app.json_encoder = ComplexEncoder
 socketio = SocketIO(app, json=json, logging=False)
-cbpi   = CraftBeerPi(app, socketio)
+cbpi = CraftBeerPi(app, socketio)
 
 app.logger.info("##########################################")
 app.logger.info("### NEW STARTUP Version 3.0")
