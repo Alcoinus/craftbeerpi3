@@ -133,7 +133,7 @@ def plugins():
     :return:
     """
     response = requests.get("https://raw.githubusercontent.com/Manuel83/craftbeerpi-plugins/master/plugins.yaml")
-    cbpi.cache["plugins"] = merge(yaml.load(response.text, Loader=yaml.FullLoaderFullLoader), cbpi.cache["plugins"])
+    cbpi.cache["plugins"] = merge(yaml.load(response.text, Loader=yaml.FullLoader), cbpi.cache["plugins"])
     for key, value in cbpi.cache["plugins"].items():
         value["installed"] = os.path.isdir("./modules/plugins/%s/" % (key))
 

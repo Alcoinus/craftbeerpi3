@@ -11,7 +11,7 @@ from modules.core.db import DBModel
 
 app = Flask(__name__)
 
-logging.config.dictConfig(yaml.load(open('./config/logger.yaml', 'r'), Loader=yaml.FullLoader))
+logging.config.dictConfig(yaml.load(open('./config/logger.yaml', 'r')))
 
 app.config['SECRET_KEY'] = 'craftbeerpi'
 app.config['UPLOAD_FOLDER'] = './upload'
@@ -37,7 +37,7 @@ class ComplexEncoder(json.JSONEncoder):
                 return obj()
             else:
                 return None
-        except TypeError:
+        except TypeError as e:
             pass
         return None
 

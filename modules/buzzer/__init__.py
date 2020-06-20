@@ -9,8 +9,8 @@ except Exception as e:
 
 
 class Buzzer(object):
-    sound = ["H", 0.1, "L", 0.1, "H", 0.1, "L", 0.1, "H", 0.1, "L"]
 
+    sound = ["H", 0.1, "L", 0.1, "H", 0.1, "L", 0.1, "H", 0.1, "L"]
     def __init__(self, gpio, beep_level):
         try:
             cbpi.app.logger.info("INIT BUZZER NOW GPIO%s" % gpio)
@@ -51,7 +51,7 @@ class Buzzer(object):
                     cbpi.app.logger.error("BUZZER EXCEPTION %s" % str(e))
                     pass
 
-        buzzerThread(self).start()
+        buzzerThread(self).run()
 
 
 @cbpi.initalizer(order=2)
