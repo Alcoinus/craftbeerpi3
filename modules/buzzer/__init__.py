@@ -1,5 +1,5 @@
 import time
-#from threading import start_new_thread
+import threading
 from modules import cbpi
 
 try:
@@ -28,25 +28,30 @@ class Buzzer(object):
             cbpi.app.logger.error("BUZZER not working")
             return
 
-        def play(sound):
-            try:
-                for i in sound:
-                    if (isinstance(i, str)):
-                        if i == "H" and self.beep_level == "HIGH":
-                            self.pi.hardware_PWM(self.gpio, 1000, 500000)
-                        elif i == "H" and self.beep_level != "HIGH":
-                            self.pi.hardware_PWM(self.gpio, 1000, 0)
-                        elif i == "L" and self.beep_level == "HIGH":
-                            self.pi.hardware_PWM(self.gpio, 1000, 0)
+        class buzzerThread(threading.Thread):
+            def __init__(self, buzzer):
+                threading.Thread.__init__(self)
+                self.buzzer = buzzer
+
+            def run(self):
+                try:
+                    for i in self.buzzer.sound:
+                        if isinstance(i, str):
+                            if i == "H" and self.buzzer.beep_level == "HIGH":
+                                self.buzzer.pi.hardware_PWM(self.buzzer.gpio, 1000, 500000)
+                            elif i == "H" and self.buzzer.beep_level != "HIGH":
+                                self.buzzer.pi.hardware_PWM(self.buzzer.gpio, 1000, 0)
+                            elif i == "L" and self.buzzer.beep_level == "HIGH":
+                                self.buzzer.pi.hardware_PWM(self.buzzer.gpio, 1000, 0)
+                            else:
+                                self.buzzer.pi.hardware_PWM(self.buzzer.gpio, 1000, 500000)
                         else:
-                            self.pi.hardware_PWM(self.gpio, 1000, 500000)
-                    else:
-                        time.sleep(i)
-            except Exception as e:
-                cbpi.app.logger.error("BUZZER EXCEPTION %s" % str(e))
-                pass
-        ## TODO
-        #start_new_thread(play, (self.sound,))
+                            time.sleep(i)
+                except Exception as e:
+                    cbpi.app.logger.error("BUZZER EXCEPTION %s" % str(e))
+                    pass
+
+        buzzerThread(self).run()
 
 
 @cbpi.initalizer(order=2)
