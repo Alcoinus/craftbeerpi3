@@ -7,6 +7,7 @@ class NotificationAPI(object):
     def notify(self, headline, message, type="success", timeout=5000):
         self.api.notify(headline, message, type, timeout)
 
+
 class ActorAPI(NotificationAPI):
 
     @cbpi.try_catch(None)
@@ -21,11 +22,13 @@ class ActorAPI(NotificationAPI):
     def actor_power(self, id, power):
         self.api.actor_power(int(id), power)
 
+
 class SensorAPI(NotificationAPI):
 
     @cbpi.try_catch(None)
     def get_sensor_value(self, id):
         return cbpi.get_sensor_value(id)
+
 
 class KettleAPI(NotificationAPI):
 
@@ -55,6 +58,7 @@ class KettleAPI(NotificationAPI):
 
             self.notify("Faild to set Target Temp", "", type="warning")
 
+
 class Timer(object):
     timer_end = Property.Number("TIMER_END", configurable=False)
 
@@ -63,7 +67,6 @@ class Timer(object):
         if self.timer_end is not None:
             return
         self.timer_end = int(time.time()) + timer
-
 
     def stop_timer(self):
         if self.timer_end is not None:
@@ -91,7 +94,6 @@ class Timer(object):
 
 
 class StepBase(Timer, ActorAPI, SensorAPI, KettleAPI):
-
     __dirty = False
     managed_fields = []
     n = False
@@ -114,13 +116,10 @@ class StepBase(Timer, ActorAPI, SensorAPI, KettleAPI):
         print("Kettle ID: %s" % self.kettle_id)
         print("ID: %s" % self.id)
 
-
     def __init__(self, *args, **kwds):
 
         for a in kwds:
-
             super(StepBase, self).__setattr__(a, kwds.get(a))
-
 
         self.api = kwds.get("api")
         self.id = kwds.get("id")
@@ -128,7 +127,6 @@ class StepBase(Timer, ActorAPI, SensorAPI, KettleAPI):
         self.kettle_id = kwds.get("kettleid")
         self.value = None
         self.__dirty = False
-
 
     def is_dirty(self):
         return self.__dirty
@@ -143,4 +141,3 @@ class StepBase(Timer, ActorAPI, SensorAPI, KettleAPI):
             super(StepBase, self).__setattr__(name, value)
         else:
             super(StepBase, self).__setattr__(name, value)
-

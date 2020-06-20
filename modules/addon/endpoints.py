@@ -14,8 +14,8 @@ import shutil
 
 blueprint = Blueprint('addon', __name__)
 
-
 modules = {}
+
 
 def merge(source, destination):
     """
@@ -26,13 +26,14 @@ def merge(source, destination):
     """
     for key, value in source.items():
         if isinstance(value, dict):
-               # get node or create one
+            # get node or create one
             node = destination.setdefault(key, {})
             merge(value, node)
         else:
             destination[key] = value
 
     return destination
+
 
 @blueprint.route('/', methods=['GET'])
 def getPlugins():
@@ -48,6 +49,7 @@ def getPlugins():
 
     return json.dumps(result)
 
+
 @blueprint.route('/<name>', methods=['GET'])
 def getFile(name):
     """
@@ -55,18 +57,18 @@ def getFile(name):
     :param name: plugin name
     :return: the plugin code from __init__.py
     """
-    return send_from_directory('./plugins/'+name, "__init__.py")
+    return send_from_directory('./plugins/' + name, "__init__.py")
+
 
 @blueprint.route('/<name>', methods=['PUT'])
 def createPlugin(name):
-
     """
     Create a new plugin file
     :param name: the plugin name
     :return: empty http response 204
     """
-    if not os.path.exists("./modules/plugins/"+name):
-        os.makedirs("./modules/plugins/"+name)
+    if not os.path.exists("./modules/plugins/" + name):
+        os.makedirs("./modules/plugins/" + name)
         with open("./modules/plugins/" + name + "/__init__.py", "wb") as fo:
             fo.write("")
         cbpi.emit_message("PLUGIN %s CREATED" % (name))
@@ -76,35 +78,33 @@ def createPlugin(name):
         return ('', 500)
 
 
-
-
 @blueprint.route('/<name>', methods=['POST'])
 def saveFile(name):
-
     """
     save plugin code. code is provides via http body
     :param name: the plugin name
     :return: empty http reponse
     """
-    with open("./modules/plugins/"+name+"/__init__.py", "wb") as fo:
+    with open("./modules/plugins/" + name + "/__init__.py", "wb") as fo:
         fo.write(request.get_data())
     cbpi.emit_message("PLUGIN %s SAVED" % (name))
 
     return ('', 204)
 
+
 @blueprint.route('/<name>', methods=['DELETE'])
 def deletePlugin(name):
-
     """
     Delete plugin
     :param name: plugin name
     :return: HTTP 204 if ok - HTTP 500 if plugin not exists
     """
-    if os.path.isdir("./modules/plugins/"+name) is False:
+    if os.path.isdir("./modules/plugins/" + name) is False:
         return ('Dir Not found', 500)
-    shutil.rmtree("./modules/plugins/"+name)
+    shutil.rmtree("./modules/plugins/" + name)
     cbpi.notify("Plugin deleted", "Plugin %s deleted successfully" % name)
     return ('', 204)
+
 
 @blueprint.route('/<name>/reload/', methods=['POST'])
 def reload(name):
@@ -133,22 +133,21 @@ def plugins():
     :return:
     """
     response = requests.get("https://raw.githubusercontent.com/Manuel83/craftbeerpi-plugins/master/plugins.yaml")
-    cbpi.cache["plugins"] = merge(yaml.load(response.text), cbpi.cache["plugins"])
-    for key, value in  cbpi.cache["plugins"].items():
+    cbpi.cache["plugins"] = merge(yaml.load(response.text, Loader=yaml.FullLoaderFullLoader), cbpi.cache["plugins"])
+    for key, value in cbpi.cache["plugins"].items():
         value["installed"] = os.path.isdir("./modules/plugins/%s/" % (key))
 
     return json.dumps(cbpi.cache["plugins"])
- 
+
 
 @blueprint.route('/<name>/download', methods=['POST'])
 def download_addon(name):
-
     plugin = cbpi.cache["plugins"].get(name)
     plugin["loading"] = True
     if plugin is None:
         return ('', 404)
     try:
-        module_path= "./modules/plugins/%s/" % (name)
+        module_path = "./modules/plugins/%s/" % (name)
         Repo.clone_from(plugin.get("repo_url"), module_path)
         chown_unroot(module_path)
 
@@ -158,9 +157,10 @@ def download_addon(name):
 
     return ('', 204)
 
+
 @blueprint.route('/<name>/update', methods=['POST'])
 def update_addon(name):
-    module_path= "./modules/plugins/%s/" % (name)
+    module_path = "./modules/plugins/%s/" % (name)
     repo = Repo(module_path)
     o = repo.remotes.origin
     info = o.pull()
@@ -171,7 +171,7 @@ def update_addon(name):
 
 def loadCorePlugins():
     for filename in os.listdir("./modules/base_plugins"):
-        if os.path.isdir("./modules/base_plugins/"+filename) is False:
+        if os.path.isdir("./modules/base_plugins/" + filename) is False:
             continue
         try:
             modules[filename] = import_module("modules.base_plugins.%s" % filename)

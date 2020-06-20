@@ -19,7 +19,7 @@ class LogView(FlaskView):
                 result.append(filename)
         return json.dumps(result)
 
-    @route('/actions')
+    @route('/actions', strict_slashes=False)
     def actions(self):
         array = self.read_log_as_json("action")
         json_dumps = json.dumps(array)
@@ -53,45 +53,53 @@ class LogView(FlaskView):
             sensor_name = "%s_%s" % ("sensor", str(id))
             result.append({"name": name, "data": self.read_log_as_json(sensor_name)})
 
-        if t == "k":
+        elif t == "k":
             kettle = cbpi.cache.get("kettle").get(id)
-            result = map(self.convert_chart_data_to_json, cbpi.get_controller(kettle.logic).get("class").chart(kettle))
+            for i in cbpi.get_controller(kettle.logic).get("class").chart(kettle):
+                result.append(self.convert_chart_data_to_json(i))
 
-        if t == "f":
+        elif t == "f":
             fermenter = cbpi.cache.get("fermenter").get(id)
-            result = map(self.convert_chart_data_to_json,
-                         cbpi.get_fermentation_controller(fermenter.logic).get("class").chart(fermenter))
+            for i in cbpi.get_fermentation_controller(fermenter.logic).get("class").chart(fermenter):
+                result.append(self.convert_chart_data_to_json(i))
 
         return json.dumps(result)
 
     def query_tsdb(self, sensor_name):
 
-        client = InfluxDBClient(cbpi.cache["config"]["influx_db_address"], cbpi.cache["config"]["influx_db_port"],
-                                cbpi.cache["config"]["influx_db_username"], cbpi.cache["config"]["influx_db_password"],
-                                cbpi.cache["config"]["influx_db_database_name"])
+        if "influx" not in cbpi.cache:
+            cbpi.cache["influx"] = InfluxDBClient(cbpi.cache["config"]["influx_db_address"].__dict__["value"],
+                                                  cbpi.cache["config"]["influx_db_port"].__dict__["value"],
+                                                  cbpi.cache["config"]["influx_db_username"].__dict__["value"],
+                                                  cbpi.cache["config"]["influx_db_password"].__dict__["value"],
+                                                  cbpi.cache["config"]["influx_db_database_name"].__dict__["value"])
 
-        query_prefix = 'select mean(value) from cbpi where time > now() - ' + \
-                       str(cbpi.cache["config"]["influx_db_start_relative"].__dict__["value"]) + \
-                       'd and \"name\" = \'' + sensor_name + '\''
+        if sensor_name != "action":
+            query_prefix = 'select mean(value) from cbpi where time > now() - ' + \
+                           str(cbpi.cache["config"]["influx_db_start_relative"].__dict__["value"]) + \
+                           'h and \"name\" = \'' + sensor_name + '\''
 
-        query_suffix = ' group by time(' +\
-                       str(cbpi.cache["config"]["influx_db_sampling_value"].__dict__["value"]) +\
-                       's) fill(previous)'
+            query_suffix = ' group by time(' +\
+                           str(cbpi.cache["config"]["influx_db_sampling_value"].__dict__["value"]) +\
+                           's)' # fill(previous)'
 
-        if cbpi.cache["active_brew"] != "none":
-            query = query_prefix + ' and brew = \'' + cbpi.cache["active_brew"] + '\'' + query_suffix
+            if cbpi.cache["active_brew"] != "none":
+                query = query_prefix + ' and brew = \'' + cbpi.cache["active_brew"] + '\'' + query_suffix
+            else:
+                query = query_prefix + query_suffix
         else:
-            query = query_prefix + query_suffix
+            query = "select message from \"cbpi/logs\""
 
-        self.logger.debug("query: %s", query)
-        result = client.query(query, epoch="ms")
-        client.close()
+        # self.logger.debug("query: %s", query)
+        result = cbpi.cache["influx"].query(query, epoch="ms")
+
         try:
             values = result.raw['series'][0]['values']
-            self.logger.debug("Time series for [%s] is [%s]", sensor_name, values)
+            # self.logger.debug("Time series for [%s] is [%s]", sensor_name, values)
             return values
         except:
             self.logger.warning("Failed to fetch time series for [%s]", sensor_name)
+            return []
 
     def query_log(self, filename, value_type):
         array = []

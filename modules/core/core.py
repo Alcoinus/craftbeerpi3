@@ -23,6 +23,7 @@ import logging
 class NotificationAPI(object):
     pass
 
+
 class ActorAPI(object):
 
     def init_actors(self):
@@ -59,7 +60,6 @@ class ActorAPI(object):
         actor.instance.on(power=power)
         actor.state = 1
         if power is not None:
-
             actor.power = power
         self.emit("SWITCH_ACTOR", actor)
 
@@ -78,13 +78,14 @@ class ActorAPI(object):
         actor.state = 0
         self.emit("SWITCH_ACTOR", actor)
 
+
 class SensorAPI(object):
 
     def init_sensors(self):
-        '''
+        """
         Initialize all sensors
-        :return: 
-        '''
+        :return:
+        """
 
         self.logger = logging.getLogger(__name__)
 
@@ -106,20 +107,19 @@ class SensorAPI(object):
             self.app.logger.info("Stop Sensor Error")
             pass
 
-
     def init_sensor(self, id):
-        '''
+        """
         initialize sensor by id
-        :param id: 
-        :return: 
-        '''
+        :param id:
+        :return:
+        """
 
         def start_active_sensor(instance):
-            '''
+            """
             start active sensors as background job
-            :param instance: 
-            :return: 
-            '''
+            :param instance:
+            :return:
+            """
             instance.execute()
 
         try:
@@ -141,7 +141,8 @@ class SensorAPI(object):
                 t = self.socketio.start_background_task(target=start_active_sensor, instance=value.instance)
 
         except Exception as e:
-            self.notify("Sensor Error", "Failed to setup Sensor %s. Please check the configuraiton" % value.name, type="danger", timeout=None)
+            self.notify("Sensor Error", "Failed to setup Sensor %s. Please check the configuraiton" % value.name,
+                        type="danger", timeout=None)
             self.app.logger.error("Initializing of Sensor %s failed" % id)
 
     def receive_sensor_value(self, id, value):
@@ -167,26 +168,38 @@ class SensorAPI(object):
 
     def write_to_tsdb(self, prefix, sensor_name, value):
 
-        client = InfluxDBClient(self.cache["config"]["influx_db_address"], self.cache["config"]["influx_db_port"],
-                                self.cache["config"]["influx_db_username"], self.cache["config"]["influx_db_password"],
-                                self.cache["config"]["influx_db_database_name"])
+        if "influx" not in self.cache:
+            self.cache["influx"] = InfluxDBClient(self.cache["config"]["influx_db_address"].__dict__["value"],
+                                                  self.cache["config"]["influx_db_port"].__dict__["value"],
+                                                  self.cache["config"]["influx_db_username"].__dict__["value"],
+                                                  self.cache["config"]["influx_db_password"].__dict__["value"],
+                                                  self.cache["config"]["influx_db_database_name"].__dict__["value"])
 
-        json_body = [
-            {
-                "measurement": "cbpi",
-                "tags": {
-                    "prefix": prefix,
-                    "name": sensor_name,
-                    "brew": self.cache["active_brew"]
-                },
-                "fields": {
-                    "value": float(value)
+        if prefix != "action":
+            json_body = [
+                {
+                    "measurement": "cbpi",
+                    "tags": {
+                        "prefix": prefix,
+                        "name": sensor_name,
+                        "brew": self.cache["active_brew"]
+                    },
+                    "fields": {
+                        "value": float(value)
+                    }
                 }
-            }
-        ]
+            ]
+        else:
+            json_body = [
+                {
+                    "measurement": "cbpi/logs",
+                    "fields": {
+                        "message": value
+                    }
+                }
+            ]
 
-        client.write_points(json_body)
-        client.close()
+        self.cache["influx"].write_points(json_body)
 
     def log_action(self, text):
         use_influxdb = (self.cache["config"]["influx_db"].__dict__["value"] == "YES")
@@ -199,7 +212,6 @@ class SensorAPI(object):
     def shutdown_sensor(self, id):
         self.cache.get("sensors")[id].stop()
 
-
     def get_sensor_value(self, id):
         try:
             id = int(id)
@@ -207,6 +219,7 @@ class SensorAPI(object):
         except Exception as e:
 
             return None
+
 
 class CacheAPI(object):
 
@@ -222,17 +235,16 @@ class CacheAPI(object):
         except:
             return None
 
-class CraftBeerPi(ActorAPI, SensorAPI):
 
+class CraftBeerPi(ActorAPI, SensorAPI):
     cache = {
-        "init": {},
         "config": {},
         "actor_types": {},
         "sensor_types": {},
         "sensors": {},
         "sensor_instances": {},
         "init": [],
-        "background":[],
+        "background": [],
         "step_types": {},
         "controller_types": {},
         "messages": [],
@@ -244,12 +256,10 @@ class CraftBeerPi(ActorAPI, SensorAPI):
     buzzer = None
     eventbus = {}
 
-
     # constructor
     def __init__(self, app, socketio):
         self.app = app
         self.socketio = socketio
-
 
     def emit(self, key, data):
         self.socketio.emit(key, data, namespace='/brew')
@@ -263,8 +273,7 @@ class CraftBeerPi(ActorAPI, SensorAPI):
         if self.buzzer is not None:
             self.buzzer.beep()
 
-
-    def add_cache_callback(self, key,  method):
+    def add_cache_callback(self, key, method):
         method.callback = True
         self.cache[key] = method
 
@@ -284,11 +293,11 @@ class CraftBeerPi(ActorAPI, SensorAPI):
             c = Config.update(**update_data)
             self.emit("UPDATE_CONFIG", c)
 
-
     def add_config_parameter(self, name, value, type, description, options=None):
         from modules.config import Config
         with self.app.app_context():
-            c = Config.insert(**{"name":name, "value": value, "type": type, "description": description, "options": options})
+            c = Config.insert(
+                **{"name": name, "value": value, "type": type, "description": description, "options": options})
             if self.cache.get("config") is not None:
                 self.cache.get("config")[c.name] = c
 
@@ -308,45 +317,43 @@ class CraftBeerPi(ActorAPI, SensorAPI):
             if isinstance(tmpObj.__getattribute__(m), Property.Number):
                 t = tmpObj.__getattribute__(m)
                 self.cache[key][name]["properties"].append(
-                    {"name": m, "label": t.label, "type": "number", "configurable": t.configurable, "description": t.description, "default_value": t.default_value})
+                    {"name": m, "label": t.label, "type": "number", "configurable": t.configurable,
+                     "description": t.description, "default_value": t.default_value})
             elif isinstance(tmpObj.__getattribute__(m), Property.Text):
                 t = tmpObj.__getattribute__(m)
                 self.cache[key][name]["properties"].append(
-                    {"name": m, "label": t.label, "type": "text", "configurable": t.configurable, "default_value": t.default_value, "description": t.description})
+                    {"name": m, "label": t.label, "type": "text", "configurable": t.configurable,
+                     "default_value": t.default_value, "description": t.description})
             elif isinstance(tmpObj.__getattribute__(m), Property.Select):
                 t = tmpObj.__getattribute__(m)
                 self.cache[key][name]["properties"].append(
-                    {"name": m, "label": t.label, "type": "select",  "configurable": True, "options": t.options, "description": t.description})
+                    {"name": m, "label": t.label, "type": "select", "configurable": True, "options": t.options,
+                     "description": t.description})
             elif isinstance(tmpObj.__getattribute__(m), Property.Actor):
                 t = tmpObj.__getattribute__(m)
-                self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "actor",  "configurable": t.configurable, "description": t.description})
+                self.cache[key][name]["properties"].append(
+                    {"name": m, "label": t.label, "type": "actor", "configurable": t.configurable,
+                     "description": t.description})
             elif isinstance(tmpObj.__getattribute__(m), Property.Sensor):
                 t = tmpObj.__getattribute__(m)
-                self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "sensor", "configurable": t.configurable, "description": t.description})
+                self.cache[key][name]["properties"].append(
+                    {"name": m, "label": t.label, "type": "sensor", "configurable": t.configurable,
+                     "description": t.description})
             elif isinstance(tmpObj.__getattribute__(m), Property.Kettle):
                 t = tmpObj.__getattribute__(m)
-                self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "kettle", "configurable": t.configurable, "description": t.description})
+                self.cache[key][name]["properties"].append(
+                    {"name": m, "label": t.label, "type": "kettle", "configurable": t.configurable,
+                     "description": t.description})
 
         for name, method in cls.__dict__.items():
             if hasattr(method, "action"):
                 label = method.__getattribute__("label")
                 self.cache[key][cls.__name__]["actions"].append({"method": name, "label": label})
 
-
         return cls
-
 
     def actor(self, cls):
         return self.__parseProps("actor_types", cls)
-
-
-
-    def actor2(self, description="", power=True, **options):
-
-        def decorator(f):
-
-            return f
-        return decorator
 
     def sensor(self, cls):
         return self.__parseProps("sensor_types", cls)
@@ -363,13 +370,13 @@ class CraftBeerPi(ActorAPI, SensorAPI):
     def get_fermentation_controller(self, name):
         return self.cache["fermentation_controller_types"].get(name)
 
-
     # Step action
-    def action(self,label):
+    def action(self, label):
         def real_decorator(func):
             func.action = True
             func.label = label
             return func
+
         return real_decorator
 
     # step decorator
@@ -384,22 +391,34 @@ class CraftBeerPi(ActorAPI, SensorAPI):
         for m in members:
             if isinstance(tmpObj.__getattribute__(m), StepProperty.Number):
                 t = tmpObj.__getattribute__(m)
-                self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "number", "configurable": t.configurable, "default_value": t.default_value, "description": t.description})
+                self.cache[key][name]["properties"].append(
+                    {"name": m, "label": t.label, "type": "number", "configurable": t.configurable,
+                     "default_value": t.default_value, "description": t.description})
             elif isinstance(tmpObj.__getattribute__(m), StepProperty.Text):
                 t = tmpObj.__getattribute__(m)
-                self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "text", "configurable": t.configurable, "default_value": t.default_value, "description": t.description})
+                self.cache[key][name]["properties"].append(
+                    {"name": m, "label": t.label, "type": "text", "configurable": t.configurable,
+                     "default_value": t.default_value, "description": t.description})
             elif isinstance(tmpObj.__getattribute__(m), StepProperty.Select):
                 t = tmpObj.__getattribute__(m)
-                self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "select", "configurable": True, "options": t.options, "description": t.description})
+                self.cache[key][name]["properties"].append(
+                    {"name": m, "label": t.label, "type": "select", "configurable": True, "options": t.options,
+                     "description": t.description})
             elif isinstance(tmpObj.__getattribute__(m), StepProperty.Actor):
                 t = tmpObj.__getattribute__(m)
-                self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "actor",  "configurable": t.configurable, "description": t.description})
+                self.cache[key][name]["properties"].append(
+                    {"name": m, "label": t.label, "type": "actor", "configurable": t.configurable,
+                     "description": t.description})
             elif isinstance(tmpObj.__getattribute__(m), StepProperty.Sensor):
                 t = tmpObj.__getattribute__(m)
-                self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "sensor", "configurable": t.configurable, "description": t.description})
+                self.cache[key][name]["properties"].append(
+                    {"name": m, "label": t.label, "type": "sensor", "configurable": t.configurable,
+                     "description": t.description})
             elif isinstance(tmpObj.__getattribute__(m), StepProperty.Kettle):
                 t = tmpObj.__getattribute__(m)
-                self.cache[key][name]["properties"].append({"name": m, "label": t.label, "type": "kettle", "configurable": t.configurable, "description": t.description})
+                self.cache[key][name]["properties"].append(
+                    {"name": m, "label": t.label, "type": "kettle", "configurable": t.configurable,
+                     "description": t.description})
 
         for name, method in cls.__dict__.items():
             if hasattr(method, "action"):
@@ -408,7 +427,6 @@ class CraftBeerPi(ActorAPI, SensorAPI):
 
         return cls
 
-
     # Event Bus
     def event(self, name, asynchronous=False):
 
@@ -416,9 +434,12 @@ class CraftBeerPi(ActorAPI, SensorAPI):
             if self.eventbus.get(name) is None:
                 self.eventbus[name] = []
             self.eventbus[name].append({"function": function, "async": asynchronous})
+
             def wrapper(*args, **kwargs):
                 return function(*args, **kwargs)
+
             return wrapper
+
         return real_decorator
 
     def emit_message(self, message):
@@ -449,8 +470,10 @@ class CraftBeerPi(ActorAPI, SensorAPI):
                 try:
                     return function(*args, **kwargs)
                 except:
-                    self.app.logger.error("Exception in function %s. Return default %s" % (function.__name__, errorResult))
+                    self.app.logger.error(
+                        "Exception in function %s. Return default %s" % (function.__name__, errorResult))
                     return errorResult
+
             return wrapper
 
         return real_decorator
@@ -476,41 +499,43 @@ class CraftBeerPi(ActorAPI, SensorAPI):
             self.notify("Kettle Setup Faild", "Please check %s configuration" % value.name, type="danger", timeout=None)
             self.app.logger.error("Initializing of Kettle %s failed" % id)
 
-
     def run_init(self):
-        '''
+        """
         call all initialziers after startup
-        :return: 
-        '''
+        :return:
+        """
         self.app.logger.info("Invoke Init")
         self.cache["init"] = sorted(self.cache["init"], key=lambda k: k['order'])
         for i in self.cache.get("init"):
-            self.app.logger.info("INITIALIZER - METHOD %s PATH %s: " % (i.get("function").__name__, str(inspect.getmodule(i.get("function")).__file__) ))
+            self.app.logger.info("INITIALIZER - METHOD %s PATH %s: " % (
+                i.get("function").__name__, str(inspect.getmodule(i.get("function")).__file__)))
             i.get("function")(self)
 
-
-
     def backgroundtask(self, key, interval, config_parameter=None):
-
-        '''
+        """
         Background Task Decorator
-        :param key: 
-        :param interval: 
-        :param config_parameter: 
-        :return: 
-        '''
+        :param key:
+        :param interval:
+        :param config_parameter:
+        :return:
+        """
+
         def real_decorator(function):
-            self.cache["background"].append({"function": function, "key": key, "interval": interval, "config_parameter": config_parameter})
+            self.cache["background"].append(
+                {"function": function, "key": key, "interval": interval, "config_parameter": config_parameter})
+
             def wrapper(*args, **kwargs):
                 return function(*args, **kwargs)
+
             return wrapper
+
         return real_decorator
 
     def run_background_processes(self):
-        '''
+        """
         call all background task after startup
-        :return: 
-        '''
+        :return:
+        """
         self.app.logger.info("Start Background")
 
         def job(interval, method):
@@ -521,6 +546,6 @@ class CraftBeerPi(ActorAPI, SensorAPI):
                     self.app.logger.error("Exception" + method.__name__ + ": " + str(e))
                 self.socketio.sleep(interval)
 
-
-        for  value in self.cache.get("background"):
-            t = self.socketio.start_background_task(target=job,  interval=value.get("interval"),  method=value.get("function"))
+        for value in self.cache.get("background"):
+            t = self.socketio.start_background_task(target=job, interval=value.get("interval"),
+                                                    method=value.get("function"))
